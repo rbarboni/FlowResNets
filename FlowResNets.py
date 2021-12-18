@@ -9,6 +9,30 @@ from tqdm import tqdm
 
 ## 4th order Runge-Kutta solver
 def RK4_Integrator(Theta, v, save_traj=False):
+    """
+    Defines an EDO integrator that is on an RK4 integration scheme.
+    The parameter Theta is sampled on discrete time intervals whereas RK4 scheme requires it to be defined at any time.
+    In that purpose it is interpolated by a picewise affine interpolator.
+    
+    Parameters
+    ----------
+    Theta: torch.tensor of size [Nt, *Parameter_shape], requires_grad = True
+    ResNet parameters
+    
+    v: function: (torch.tensor[torch.tensor[q], *Parameter_shape) -> torch.tensor[q]
+    vector field parameterized by Theta
+    
+    save_traj: boolean
+    Optional arguments, if True, trajectory is saved along the flow
+    
+    Returns
+    -------
+    f: function: torch.tensor[*Input_shape] -> torch.tensor[*Input_shape] (, torch.tensor[Nt, *Input_shape])
+    Flow from time 0 to time 1 of the vector field v parameterized by Theta.
+    If save_traj=True, f also returns the trajectory
+    
+    """
+
     Nt = Theta.shape[0]
     dt = 1 / (Nt - 1)
 
@@ -33,6 +57,28 @@ def RK4_Integrator(Theta, v, save_traj=False):
 
 ## Explicit Euler integrator
 def Euler_Integrator(Theta, v, save_traj=False):
+    """
+    Defines an EDO integrator that is on an explicit Euler integration scheme
+    
+    Parameters
+    ----------
+    Theta: torch.tensor of size [Nt, *Parameter_shape], requires_grad = True
+    ResNet parameters
+    
+    v: function: (torch.tensor[torch.tensor[q], *Parameter_shape) -> torch.tensor[q]
+    vector field parameterized by Theta
+    
+    save_traj: boolean
+    Optional arguments, if True, trajectory is saved along the flow
+    
+    Returns
+    -------
+    f: function: torch.tensor[*Input_shape] -> torch.tensor[*Input_shape] (, torch.tensor[Nt, *Input_shape])
+    Flow from time 0 to time 1 of the vector field v parameterized by Theta.
+    If save_traj=True, f also returns the trajectory
+    
+    """
+    
     Nt = Theta.shape[0]
     dt = 1 / (Nt - 1)
 
@@ -123,8 +169,34 @@ def Sinkhorn_loss(x, y, eps=0.1, it=20):
     return (C * P).sum()
 
 ## FlowResNet objects
-class FlowResNet():
+class FlowResNet(): 
     def __init__(self, Nt, A, B, v, Integrator, save_traj=False):
+        """
+        Parameters
+        ----------
+        
+        Nt: float
+        Number of layers, or equivalently, number of time steps in the ODE integrator
+        
+        A: torch.tensor[Input_dim, q]
+        Embedding matrix at FlowResNet entry, lifts Input in higher dimensional space
+        
+        B: torch.tensor[q, Output_dim]
+        Projection matrix at FlowResNet's output
+        
+        
+        v: vector_field object
+        v.eval is a vector field parameterized by tensor of size v.parameter_shape
+        
+        Integrator: function: (torch.tensor[Nt, *Parameter_shape], function: (torch.tensor[q], torch.tensor[*Parameter_shape]) -> torch.tensor[q] )
+        		-> ( function: torch.tensor[q] -> torch.tensor[q])
+        ODE integrator, optional save_traj arguments allows to return trajectories of the flow
+        
+        save_traj: boolean
+        optional argument, if True, forward method will save and return the value of the output at each intermediate layer
+        
+        """
+        
         super(FlowResNet, self).__init__()
         self.Nt = Nt ## number of times steps (i.e. layers)
         self.A = A
@@ -136,6 +208,20 @@ class FlowResNet():
 
     ## forward method of the model
     def forward(self, input):
+    	"""
+    	Forward method of the ResNet
+    	
+    	Parameters
+    	----------
+    	input: torch.tensor[*Input_shape]
+    	
+    	Returns
+    	-------
+    	torch.tensor[*Output_shape]
+    	if self.save_traj=True, also returns outputs at each intermediate layers
+    	
+    	"""
+    	
         f = self.Integrator(self.Theta, self.v.eval, save_traj=self.save_traj)
         if self.save_traj:
             z, traj = f(torch.matmul(input, self.A))
@@ -148,6 +234,17 @@ class FlowResNet():
 ## they carry the parameter's shape information and are provided with an evaluation method
 class vector_field():
     def __init__(self, parameter_shape, v):
+    	"""
+    	Parameters
+    	----------
+    	parameter_shape: tuple
+    	shape of the parameters for vector field v
+    	
+    	v: function: (torch.tensor[q], torch.tensor[*Parameter_shape]) -> torch.tensor[q]
+    	parameterized vector field
+    	
+    	"""
+    	
         super(vector_field, self).__init__()
         self.parameter_shape = parameter_shape ## access to parameter_shape will be needed in FlowResNet objects
         self.eval = v
@@ -155,6 +252,35 @@ class vector_field():
 ## training routine
 ## performs sgd on model with data stored in train_loader, optional test arguments
 def train_sgd(model, train_loader, loss_fn, Nit, lr, test_set=None, loss_fn_test=None):
+    """
+    Parameters
+    ---------
+    model: FlowResNet object
+    
+    train_loader: torch.utils.data.dataloader.Dataloader object
+    
+    loss_fn: function: torch.tensor[Batch_size, *Output_shape], torch.tensor[Batch_size, *Target_shape]) -> float
+    
+    Nit: int
+    number of passage over train_loader during training
+    
+    lr: float
+    learning rate
+    
+    test_set: test dataset, optional
+    
+    loss_fn_test: function: torch.tensor[N, *Output_shape], torch.tensor[N, *Target_shape])
+    
+    Returns
+    -------
+    train_loss: torch.tensor[Nit*Batch_number]
+    evolution of training loss along SGD
+    
+    test_loss: torch.tensor[Nit*Batch_number]
+    evolution of test loss along SGD, if test_set is not None
+    
+    """
+    
     optimizer = torch.optim.SGD([model.Theta], lr=lr) ## fixed learning rate, maybe change that
 
     train_loss = torch.empty(0) ## stores training loss
