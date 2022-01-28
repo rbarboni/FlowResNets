@@ -9,19 +9,19 @@ import pickle
 import sys
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, choices=['RKHS', 'SHL'], default='RKHS')
-parser.add_argument('--in_channels', type=int, choices=[8, 16, 32, 64], default=32)
-parser.add_argument('--layers', type=int, default=10)
+parser.add_argument('--model', '-m', type=str, choices=['RKHS', 'SHL'], default='RKHS')
+parser.add_argument('--in_channels', '-in', type=int, default=32)
+parser.add_argument('--layers', '-l', type=int, default=20)
 parser.add_argument('--dim_int', type=int, default=32)
-parser.add_argument('--pretrain', type=int, default=0)
+parser.add_argument('--pretrain', '-p', type=int, default=0)
 parser.add_argument('--method', type=str, choices=['euler', 'midpoint', 'rk4'], default='midpoint')
-parser.add_argument('--epochs', type=int, default=40)
-parser.add_argument('--lr_init', type=float, default=0.01)
-parser.add_argument('--decay_rate', type=float, default=0.1)
-parser.add_argument('--decay_steps', type=list, default=[])
-parser.add_argument('--batch_size', type=int, default=256)
-parser.add_argument('--test_batch_size', type=int, default=1000)
-parser.add_argument('--save', type=str, default='experiment.pkl')
+parser.add_argument('--epochs', '-e', type=int, default=30)
+parser.add_argument('--lr_init', '-lr', type=float, default=1)
+parser.add_argument('--decay_rate', '-dr', type=float, default=0.1)
+parser.add_argument('--decay_steps', '-ds', nargs='*', type=int, default=[25])
+parser.add_argument('--batch_size', '-bs', type=int, default=256)
+parser.add_argument('--test_batch_size', '-tbs', type=int, default=1000)
+parser.add_argument('--save', '-s', type=str, default='experiment.pkl')
 parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
@@ -70,11 +70,22 @@ else:
     func = node.SHL_ODEfunc(dim=args.in_channels,
                            dim_int=args.dim_int,
                            num_steps=args.layers)
-model = node.ODEBlock(func, num_steps=args.layers, method=args.method)
+model = node.ODEBlock(func, num_steps=args.layers, method=args.method).cuda()
 num_parameters = node.count_parameters(model)
 print(f'Model has {num_parameters} trainable parameters')
 
-if not os.path.isdir('MNIST_pretrained_models'):
+
+try:
+    print('==> Loading pretrained embedding...')
+    input_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_input_embedding.pt')
+    input_embedding = input_checkpoint['model'].cuda()
+    input_embedding.eval()
+
+    output_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_output_embedding.pt')
+    output_embedding = output_checkpoint['model'].cuda()
+    output_embedding.eval()
+
+except FileNotFoundError:
     print('Pretrained models are not available ==> pretraining...')
     downsampling_layers = [
         nn.Conv2d(1, args.in_channels, 4, stride=2, padding=0),
@@ -85,30 +96,22 @@ if not os.path.isdir('MNIST_pretrained_models'):
     ]
     fc_layers = [nn.BatchNorm2d(args.in_channels),
                  nn.Flatten(),
-                 nn.Linear(args.in_channels, 10)]
-    pretrain_model = nn.Sequential(*downsampling_layers, *fc_layers)
+                 nn.Linear(args.in_channels*25, 10)]
+
+    pretrain_model = nn.Sequential(*downsampling_layers, *fc_layers).cuda()
     pretrain_losses = node.train_sgd(pretrain_model,
-                                    train_loader,
-                                    train_eval_loader,
-                                    test_loader,
-                                    epochs=args.pretrain,
-                                    lr_init=1,
-                                    save_best=False)
-    input_embedding = nn.Sequential(*downsampling_layers)
-    output_embedding = nn.Sequential(*fc_layers)
-
-else:
-    print('==> Loading pretrained embedding...')
-    input_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_input_embedding.pt')
-    input_embedding = input_checkpoint['model']
-    input_embedding.eval()
-
-    output_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_output_embedding.pt')
-    output_embedding = output_checkpoint['model']
-    output_embedding.eval()
+                                     train_loader,
+                                     train_eval_loader,
+                                     test_loader,
+                                     epochs=args.pretrain,
+                                     lr_init=1,
+                                     save_best=False)
+    input_embedding = nn.Sequential(*downsampling_layers).cuda()
+    output_embedding = nn.Sequential(*fc_layers).cuda()
 
 print('==> Training...')
 start_time = time.time()
+
 losses = node.train_sgd(model,
                        train_loader,
                        train_eval_loader,
@@ -118,8 +121,11 @@ losses = node.train_sgd(model,
                        epochs=args.epochs,
                        lr_init=args.lr_init,
                        decay_steps=args.decay_steps,
-                       decay_rate=args.decay_rate)
+                       decay_rate=args.decay_rate,
+                        ckpt_dir='MNIST_checkpoint')
+
 computation_time = time.time() - start_time
+
 
 training_dict = {
     'model': args.model,
@@ -130,7 +136,7 @@ training_dict = {
     'batch_size': args.batch_size,
     'train_loss': losses[0].numpy(),
     'train_classif': losses[1].numpy(),
-    'test_loss': losses[2].numpy(),
+    'test_classif': losses[2].numpy(),
     'computation_time': computation_time,
     'num_parameters': num_parameters
 }
@@ -141,3 +147,5 @@ f = open('MNIST_experiments/'+args.save,"wb")
 pickle.dump(training_dict,f)
 # close file
 f.close()
+
+print('Training data saved at: MNIST_experiments/'+args.save)

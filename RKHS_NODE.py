@@ -4,9 +4,8 @@ import torch.nn.functional as F
 import torchdiffeq as tde
 from tqdm import tqdm
 import os
-import sys
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def classif_loss(x: torch.Tensor, y: torch.Tensor) -> float:
     x_max = torch.max(x, dim=1)[1]
@@ -26,10 +25,12 @@ class RKHS_ODEfunc(nn.Module):
                  zero_init=True,
                  Omega=None):
         super(RKHS_ODEfunc, self).__init__()
+        self.conv1 = nn.Conv2d(dim, dim_int, 3, padding=1, bias=False)
         if Omega is not None:
-            self.Omega = Omega.to(device)
+            self.conv1.weight = nn.Parameter(data=Omega)
         else:
-            self.Omega = torch.randn(dim_int, dim, 3, 3, requires_grad=False).to(device)
+            self.conv1.weight = nn.Parameter(data=(torch.randn(dim_int, dim, 3, 3) / (3 * dim_int)**0.5))
+        self.conv1.weight.requires_grad = False
         self.num_steps = num_steps
         self.block_list = nn.ModuleList([nn.Conv2d(dim_int, dim, 3, padding=1, bias=False) for _ in range(num_steps+1)])
         if zero_init:
@@ -39,7 +40,7 @@ class RKHS_ODEfunc(nn.Module):
 
     def forward(self, t, x):
         k = int(t * self.num_steps - 1)
-        out = F.relu(F.conv2d(x, self.Omega, padding=1))
+        out = F.relu(self.conv1(x))
         block1 = self.block_list[k]
         if k < self.num_steps:
             block2 = self.block_list[k + 1]
@@ -92,7 +93,9 @@ class RKHS_Block(nn.Module):
     def __init__(self, in_planes, planes, stride=1, zero_init=True):
         super(RKHS_Block, self).__init__()
         self.stride = stride
-        self.Omega = torch.randn(planes, in_planes, 3, 3, requires_grad=False).to(device)
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=self.stride, padding=1, bias=False)
+        self.conv1.weight = nn.Parameter(data=(torch.randn(planes, in_planes, 3, 3) / (9 * in_planes) ** 0.5))
+        self.conv1.weight.requires_grad = False
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         if zero_init:
             self.conv2.weight = nn.Parameter(data=torch.zeros_like(self.conv2.weight))
@@ -104,7 +107,7 @@ class RKHS_Block(nn.Module):
                           nn.BatchNorm2d(self.expansion*planes)
                           )
     def forward(self, x):
-        out = F.relu(F.conv2d(x, self.Omega, stride=self.stride, padding=1))
+        out = F.relu(self.conv1(x))
         out = self.conv2(out)
         out += self.shortcut(x)
         return out
@@ -142,8 +145,10 @@ class ResNet(nn.Module):
             zero_inits = [False, False, True, False]
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1, zero_init=zero_inits[0])
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2, zero_init=zero_inits[0])
+        self.bn2 = nn.BatchNorm2d(128)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2, zero_init=zero_inits[0])
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2, zero_init=zero_inits[0])
+        self.pool = nn.AvgPool2d(kernel_size=4)
         self.linear = nn.Linear(512*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride, zero_init=True):
@@ -159,10 +164,10 @@ class ResNet(nn.Module):
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
-        out = self.layer2(out)
+        out = self.bn2(self.layer2(out))
         out = self.layer3(out)
         out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
+        out = self.pool(out)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
@@ -172,9 +177,9 @@ def accuracy(model, loader,
              input_embedding=nn.Identity(),
              output_embedding=nn.Identity(),
              averaged=True):
-    model = model.to(device)
-    input_embedding = input_embedding.to(device)
-    output_embedding = output_embedding.to(device)
+    #model = model.to(device)
+    #input_embedding = input_embedding.to(device)
+    #output_embedding = output_embedding.to(device)
     if averaged:
         res = 0
         for inputs, targets in loader:
@@ -190,7 +195,6 @@ def accuracy(model, loader,
         outputs = output_embedding(model(input_embedding(inputs)))
         return criterion(outputs, targets)
 
-
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -198,9 +202,12 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
               loss_fn=nn.CrossEntropyLoss(),
               input_embedding=nn.Identity().to(device),
               output_embedding=nn.Identity().to(device),
-              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1, save_best=True):
+              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1,
+              save_best=True, ckpt_dir='checkpoint'):
 
-    model = model.to(device)
+    model = model.cuda()
+    if device == 'cuda':
+        model = torch.nn.DataParallel(model)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr_init)
 
@@ -211,11 +218,11 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                                                      milestones=decay_steps,
                                                      gamma=decay_rate)
 
-    input_embedding = input_embedding.to(device)
+    input_embedding = input_embedding.cuda()
     input_embedding.train(mode=False)
     input_embedding.requires_grad_(requires_grad=False)
 
-    output_embedding = output_embedding.to(device)
+    output_embedding = output_embedding.cuda()
     output_embedding.train(mode=False)
     output_embedding.requires_grad_(requires_grad=False)
 
@@ -257,7 +264,8 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
             optimizer.step()
 
             if torch.isnan(outputs.detach()).sum() > 0:
-                sys.exit('\n Stopped because output is NaN')
+                print('Output is NaN: exiting training')
+                return train_loss, train_classif_loss, test_classif_loss
             train_loss = torch.cat((train_loss, loss.detach().cpu().expand((1,))))
 
         with torch.no_grad():
@@ -277,18 +285,18 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                                             loss.detach().cpu().expand((1, ))))
             print(f'test error rate= {100*test_classif_loss[-1]:.2f}%')
 
-        if test_classif_loss[-1] < best:
+        if test_classif_loss[-1] - best < -1e-3:
             best = test_classif_loss[-1]
             if save_best:
-                print('Saving..')
+                print('Saving...')
                 state = {
-                    'net': model.state_dict(),
+                    'model': model.state_dict(),
                     'classif_error': best,
                     'epoch': epoch,
                 }
-                if not os.path.isdir('checkpoint'):
-                    os.mkdir('checkpoint')
-                torch.save(state, './checkpoint/ckpt.pth')
+                if not os.path.isdir(ckpt_dir):
+                    os.mkdir(ckpt_dir)
+                torch.save(state, './'+ckpt_dir+'/ckpt.pth')
 
         scheduler.step()
 

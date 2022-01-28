@@ -8,25 +8,24 @@ import sys
 import pickle
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, choices=['RKHS', 'SHL'], default='RKHS')
-parser.add_argument('--layers', type=int, default=10)
-parser.add_argument('--epochs', type=int, default=100)
-parser.add_argument('--lr_init', type=float, default=1)
-parser.add_argument('--decay_rate', type=float, default=1e-5)
-parser.add_argument('--decay_steps', type=list, default=[50, 85])
-parser.add_argument('--batch_size', type=int, default=256)
-parser.add_argument('--test_batch_size', type=int, default=2000)
-parser.add_argument('--save', type=str, default='experiment.pkl')
-parser.add_argument('--debug', action='store_true')
+parser.add_argument('--model', '-m', type=str, choices=['RKHS', 'SHL'], default='RKHS')
+parser.add_argument('--layers', '-l', type=int, default=10)
+parser.add_argument('--epochs', '-e', type=int, default=200)
+parser.add_argument('--lr_init', '-lr', type=float, default=5e-3)
+parser.add_argument('--decay_rate', '-dr', type=float, default=0.1)
+parser.add_argument('--decay_steps', '-ds', nargs='*', type=int, default=[150, 190])
+parser.add_argument('--batch_size', '-bs', type=int, default=256)
+parser.add_argument('--test_batch_size', '-tbs', type=int, default=1000)
+parser.add_argument('--save', '-s', type=str, default='experiment.pkl')
 args = parser.parse_args()
 
 if not os.path.isdir('CIFAR_experiments'):
     os.mkdir('CIFAR_experiments')
 if os.path.isfile('CIFAR_experiments/'+args.save):
-    sys.exit('A training file already exists: exiting script ...')
+    sys.exit('This training file already exists: exiting script ...')
 
 if torch.cuda.is_available():
-    print('Using gpu !')
+    print('Using gpus')
 else:
     print('WARNING: using cpu, computation may be slow !')
 
@@ -76,6 +75,7 @@ model = node.ResNet(node.RKHS_Block if args.model=='RKHS' else node.SHL_Block,
                     [2, 2, args.layers, 2],
                     num_classes=len(train_set.classes)
                     )
+model = model.cuda()
 
 # Training
 start_time = time.time()
@@ -86,7 +86,8 @@ losses = node.train_sgd(model,
                         epochs=args.epochs,
                         lr_init=args.lr_init,
                         decay_steps=args.decay_steps,
-                        decay_rate=args.decay_rate)
+                        decay_rate=args.decay_rate,
+                        ckpt_dir='CIFAR_checkpoint')
 computation_time = time.time() - start_time
 
 training_dict = {
@@ -96,7 +97,7 @@ training_dict = {
     'batch_size': args.batch_size,
     'train_loss': losses[0].numpy(),
     'train_classif': losses[1].numpy(),
-    'test_loss': losses[2].numpy(),
+    'test_classif': losses[2].numpy(),
     'computation_time': computation_time
 }
 
@@ -107,5 +108,4 @@ pickle.dump(training_dict,f)
 # close file
 f.close()
 
-
-
+print('Training data saved at: CIFAR_experiments/'+args.save)
