@@ -5,7 +5,7 @@ import torchdiffeq as tde
 from tqdm import tqdm
 import os
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def classif_loss(x: torch.Tensor, y: torch.Tensor) -> float:
     x_max = torch.max(x, dim=1)[1]
@@ -177,9 +177,7 @@ def accuracy(model, loader,
              input_embedding=nn.Identity(),
              output_embedding=nn.Identity(),
              averaged=True):
-    #model = model.to(device)
-    #input_embedding = input_embedding.to(device)
-    #output_embedding = output_embedding.to(device)
+
     if averaged:
         res = 0
         for inputs, targets in loader:
@@ -205,10 +203,21 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
               epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1,
               save_best=True, ckpt_dir='checkpoint'):
 
-    model = model.cuda()
-    if device == 'cuda':
+    if torch.cuda.device_count() > 1:
+        input_embedding = torch.nn.DataParallel(input_embedding)
+        output_embedding = torch.nn.DataParallel(output_embedding)
         model = torch.nn.DataParallel(model)
+
+    model = model.to(device)
+    input_embedding = input_embedding.to(device)
+    output_embedding = output_embedding.to(device)
+
     model.train()
+    input_embedding.train(mode=False)
+    input_embedding.requires_grad_(requires_grad=False)
+    output_embedding.train(mode=False)
+    output_embedding.requires_grad_(requires_grad=False)
+
     optimizer = torch.optim.SGD(model.parameters(), lr=lr_init)
 
     if decay_steps is None:
@@ -217,14 +226,6 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                      milestones=decay_steps,
                                                      gamma=decay_rate)
-
-    input_embedding = input_embedding.cuda()
-    input_embedding.train(mode=False)
-    input_embedding.requires_grad_(requires_grad=False)
-
-    output_embedding = output_embedding.cuda()
-    output_embedding.train(mode=False)
-    output_embedding.requires_grad_(requires_grad=False)
 
     train_loss = torch.empty(0)
     train_classif_loss = torch.empty(0)
@@ -257,7 +258,7 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
             inputs = inputs.to(device)
             targets = targets.to(device)
             inputs = input_embedding(inputs)
-            outputs= model(inputs)
+            outputs = model(inputs)
             outputs = output_embedding(outputs)
             loss = loss_fn(outputs, targets)
             loss.backward()

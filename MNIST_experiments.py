@@ -70,7 +70,7 @@ else:
     func = node.SHL_ODEfunc(dim=args.in_channels,
                            dim_int=args.dim_int,
                            num_steps=args.layers)
-model = node.ODEBlock(func, num_steps=args.layers, method=args.method).cuda()
+model = node.ODEBlock(func, num_steps=args.layers, method=args.method)
 num_parameters = node.count_parameters(model)
 print(f'Model has {num_parameters} trainable parameters')
 
@@ -78,11 +78,11 @@ print(f'Model has {num_parameters} trainable parameters')
 try:
     print('==> Loading pretrained embedding...')
     input_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_input_embedding.pt')
-    input_embedding = input_checkpoint['model'].cuda()
+    input_embedding = input_checkpoint['model']
     input_embedding.eval()
 
     output_checkpoint = torch.load(f'MNIST_pretrained_models/{args.in_channels}channels_{args.pretrain}pass_output_embedding.pt')
-    output_embedding = output_checkpoint['model'].cuda()
+    output_embedding = output_checkpoint['model']
     output_embedding.eval()
 
 except FileNotFoundError:
@@ -106,8 +106,8 @@ except FileNotFoundError:
                                      epochs=args.pretrain,
                                      lr_init=1,
                                      save_best=False)
-    input_embedding = nn.Sequential(*downsampling_layers).cuda()
-    output_embedding = nn.Sequential(*fc_layers).cuda()
+    input_embedding = nn.Sequential(*downsampling_layers)
+    output_embedding = nn.Sequential(*fc_layers)
 
 print('==> Training...')
 start_time = time.time()
