@@ -80,10 +80,11 @@ class ODEBlock(nn.Module):
         self.odefunc = odefunc
         self.method = method
         self.options = {'step_size': 1 / num_steps}
+        self.time = torch.tensor([0,1]).float()
 
     def forward(self, x):
         out = tde.odeint(self.odefunc, x,
-                         t=torch.tensor([0, 1]).float().to(device),
+                         t=self.time,
                          method=self.method,
                          options=self.options)
         return out[1]
