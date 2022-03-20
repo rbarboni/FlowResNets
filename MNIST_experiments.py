@@ -47,7 +47,7 @@ test_set = datasets.MNIST(root="MNIST",
 
 # Data
 print('==> Preparing data..')
-num_workers = 2*torch.cuda.device_count() if torch.cuda.is_available() else 16
+num_workers = 2 if torch.cuda.is_available() else 16
 train_loader = torch.utils.data.DataLoader(train_set,
                                            batch_size=args.batch_size,
                                            shuffle=True,
