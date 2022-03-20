@@ -47,18 +47,19 @@ test_set = datasets.MNIST(root="MNIST",
 
 # Data
 print('==> Preparing data..')
+num_workers = 2*torch.cuda.device_count() if torch.cuda.is_available() else 16
 train_loader = torch.utils.data.DataLoader(train_set,
                                            batch_size=args.batch_size,
                                            shuffle=True,
-                                           num_workers=4)
+                                           num_workers=num_workers)
 train_eval_loader = torch.utils.data.DataLoader(train_set,
                                                 batch_size=args.test_batch_size,
                                                 shuffle=False,
-                                                num_workers=4)
+                                                num_workers=num_workers)
 test_loader = torch.utils.data.DataLoader(test_set,
                                           batch_size=args.test_batch_size,
                                           shuffle=False,
-                                          num_workers=4)
+                                          num_workers=num_workers)
 print('==> Building model ...')
 if args.model=='RKHS':
     print('ResNet with RKHS residuals')
