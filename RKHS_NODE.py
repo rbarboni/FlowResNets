@@ -296,7 +296,7 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
         if test_classif_loss[-1] - best < -1e-3:
             best = test_classif_loss[-1]
             if save_best:
-                print('Saving...')
+                #print('Saving...')
                 state = {
                     'model': model.state_dict(),
                     'classif_error': best,
