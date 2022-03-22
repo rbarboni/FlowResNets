@@ -249,14 +249,15 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                         output_embedding=output_embedding)
         test_classif_loss = torch.cat((test_classif_loss,
                                         loss.detach().cpu().expand((1, ))))
-        print(f'test error rate = {100*test_classif_loss[-1]:.2f}%')
+        #print(f'test error rate = {100*test_classif_loss[-1]:.2f}%')
 
     best = test_classif_loss[-1]
 
     tepochs = trange(epochs, desc='Best: , Current: ', position=0, leave=True)
 
     for epoch in tepochs:
-        tepochs.set_description(f'Best: {best}, Current: {test_classif_loss[-1]}', refresh=True)
+        tepochs.set_description(f'Best: {100*best:.2f}%, Current: {100*test_classif_loss[-1]:.2f}%',
+                                refresh=True)
 
         model.train()
         for inputs, targets in train_loader: ## training loop
@@ -290,7 +291,7 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                             output_embedding=output_embedding)
             test_classif_loss = torch.cat((test_classif_loss,
                                             loss.detach().cpu().expand((1, ))))
-            print(f'test error rate= {100*test_classif_loss[-1]:.2f}%')
+            #print(f'test error rate= {100*test_classif_loss[-1]:.2f}%')
 
         if test_classif_loss[-1] - best < -1e-3:
             best = test_classif_loss[-1]
