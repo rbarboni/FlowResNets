@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchdiffeq as tde
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import os
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -252,9 +252,14 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
         print(f'test error rate = {100*test_classif_loss[-1]:.2f}%')
 
     best = test_classif_loss[-1]
-    for epoch in range(epochs):
+
+    tepochs = trange(epochs, desc='Best: , Current: ', position=0, leave=True)
+
+    for epoch in tepochs:
+        tepochs.set_description(f'Best: {best}, Current: {test_classif_loss[-1]}', refresh=True)
+
         model.train()
-        for inputs, targets in tqdm(train_loader, desc=f'pass number {epoch}', position=0, leave=True): ## training loop
+        for inputs, targets in train_loader: ## training loop
             optimizer.zero_grad()
             inputs = inputs.to(device)
             targets = targets.to(device)
