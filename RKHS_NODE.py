@@ -87,7 +87,6 @@ class ODEBlock(nn.Module):
                          t=self.time,
                          method=self.method,
                          options=self.options)
-        print('Forward pass ...')
         return out[1]
 
 class RKHS_Block(nn.Module):
@@ -254,11 +253,9 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
     best = test_classif_loss[-1]
 
     for epoch in range(epochs):
+        print(f'Best: {100 * best:.2f}%, Current: {100 * test_classif_loss[-1]:.2f}%')
         model.train()
-        #for inputs, targets in tqdm(train_loader, desc=f'Iteration: {epoch}', position=0, leave=True):
-        for inputs, targets in train_loader:
-            print(f'Best: {100*best:.2f}%, Current: {100*test_classif_loss[-1]:.2f}%')
-
+        for inputs, targets in tqdm(train_loader, desc=f'Iteration: {epoch}', position=0, leave=True):
             optimizer.zero_grad()
             inputs = inputs.to(device)
             targets = targets.to(device)
