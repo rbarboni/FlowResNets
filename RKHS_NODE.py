@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchdiffeq as tde
-from tqdm import tqdm, trange
+from tqdm import tqdm
 import os
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -87,6 +87,7 @@ class ODEBlock(nn.Module):
                          t=self.time,
                          method=self.method,
                          options=self.options)
+        print('Forward pass ...')
         return out[1]
 
 class RKHS_Block(nn.Module):
@@ -249,18 +250,15 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                         output_embedding=output_embedding)
         test_classif_loss = torch.cat((test_classif_loss,
                                         loss.detach().cpu().expand((1, ))))
-        #print(f'test error rate = {100*test_classif_loss[-1]:.2f}%')
 
     best = test_classif_loss[-1]
 
-    tepochs = trange(epochs, desc='Best: , Current: ', position=0, leave=True)
-
-    for epoch in tepochs:
-        tepochs.set_description(f'Best: {100*best:.2f}%, Current: {100*test_classif_loss[-1]:.2f}%',
-                                refresh=True)
-
+    for epoch in range(epochs):
         model.train()
-        for inputs, targets in train_loader: ## training loop
+        #for inputs, targets in tqdm(train_loader, desc=f'Iteration: {epoch}', position=0, leave=True):
+        for inputs, targets in train_loader:
+            print(f'Best: {100*best:.2f}%, Current: {100*test_classif_loss[-1]:.2f}%')
+
             optimizer.zero_grad()
             inputs = inputs.to(device)
             targets = targets.to(device)
@@ -291,12 +289,11 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
                             output_embedding=output_embedding)
             test_classif_loss = torch.cat((test_classif_loss,
                                             loss.detach().cpu().expand((1, ))))
-            #print(f'test error rate= {100*test_classif_loss[-1]:.2f}%')
 
         if test_classif_loss[-1] - best < -1e-3:
             best = test_classif_loss[-1]
             if save_best:
-                #print('Saving...')
+                print('Saving...')
                 state = {
                     'model': model.state_dict(),
                     'classif_error': best,
