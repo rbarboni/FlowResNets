@@ -16,7 +16,8 @@ parser.add_argument('--data_dim', '-d', type=int, default=2)
 parser.add_argument('--num_labels', '-nl', type=int, default=2)
 parser.add_argument('--dim', '-q', type=int, default=10)
 parser.add_argument('--num_layers', '-l', type=int, default=10)
-parser.add_argument('-dim_int', '-r', type=int, default=20)
+parser.add_argument('--dim_int', '-r', type=int, default=20)
+parser.add_argument('--nu', type=float, default=-1)
 parser.add_argument('--method', type=str, choices=['euler', 'midpoint', 'rk4'], default='midpoint')
 parser.add_argument('--epochs', '-e', type=int, default=1000)
 parser.add_argument('--learning_rate', '-lr', type=float, default=1)
@@ -37,12 +38,15 @@ class RKHS_ODEfunc(nn.Module):
 
     def __init__(self, dim, dim_int,
                  num_steps,
-                 zero_init=True,
-                 Omega=None):
+                 zero_init=True, nu=-1):
         super(RKHS_ODEfunc, self).__init__()
         self.lin1 = nn.Linear(dim, dim_int, bias=False)
-        if Omega is not None:
-            self.lin1.weight = nn.Parameter(data=Omega)
+        if nu >= 0:
+            Y = torch.randn(dim_int, dim)
+            m = torch.distributions.chi2.Chi2(df=2*nu)
+            u = m.sample(sample_shape=(dim_int,))
+            Omega = Y / torch.sqrt(u / (2*nu))[:, None]
+            self.lin1.weight = nn.Parameter(data=(Omega-torch.mean(Omega,axis=0)[None, :]))
         else:
             self.lin1.weight = nn.Parameter(data=(torch.randn(dim_int, dim) / dim_int**0.5))
         self.lin1.weight.requires_grad = False
@@ -156,6 +160,7 @@ num_layers = args.num_layers
 num_labels = args.num_labels
 q = args.dim
 r = args.dim_int
+nu = args.nu
 
 train_set = (torch.randn(N, d), torch.randint(num_labels, (N,)))
 
@@ -182,7 +187,8 @@ if args.model == 'SHL':
 else:
     func = RKHS_ODEfunc(dim=q,
                        dim_int=r,
-                       num_steps=num_layers)
+                       num_steps=num_layers,
+                        nu=nu)
 model = ODEBlock(func, num_steps=num_layers, method='midpoint')
 num_parameters = count_parameters(model)
 print(f'Model has {num_parameters} trainable parameters')
