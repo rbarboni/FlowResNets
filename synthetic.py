@@ -46,7 +46,7 @@ class RKHS_ODEfunc(nn.Module):
             m = torch.distributions.chi2.Chi2(df=2*nu)
             u = m.sample(sample_shape=(dim_int,))
             Omega = Y / torch.sqrt(u / (2*nu))[:, None]
-            self.lin1.weight = nn.Parameter(data=(Omega-torch.mean(Omega,axis=0)[None, :]))
+            self.lin1.weight = nn.Parameter(data=(Omega-torch.mean(Omega,axis=0)[None, :]) / dim_int**0.5)
         else:
             self.lin1.weight = nn.Parameter(data=(torch.randn(dim_int, dim) / dim_int**0.5))
         self.lin1.weight.requires_grad = False
