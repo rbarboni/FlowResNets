@@ -112,7 +112,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def train(model, train_set,
-          loss_fn=nn.CrossEntropyLoss(),
+          loss_fn=nn.MSELoss(),
           input_embedding=nn.Identity(),
           output_embedding=nn.Identity(),
           epochs=1, lr=0.1):
@@ -162,7 +162,7 @@ q = args.dim
 r = args.dim_int
 nu = args.nu
 
-train_set = (torch.randn(N, d), torch.randint(num_labels, (N,)))
+train_set = (torch.randn(N, d), torch.randn(N, d))
 
 # setting input_embedding A
 A = torch.zeros((q, d))
