@@ -14,7 +14,7 @@ parser.add_argument('--model', '-m', type=str, choices=['RKHS', 'SHL'], default=
 parser.add_argument('--dataset_size', '-N', type=int, default=100)
 parser.add_argument('--data_dim', '-d', type=int, default=2)
 parser.add_argument('--num_labels', '-nl', type=int, default=2)
-parser.add_argument('--dim', '-q', type=int, default=10)
+parser.add_argument('--dim', '-q', type=int, default=2)
 parser.add_argument('--num_layers', '-l', type=int, default=10)
 parser.add_argument('--dim_int', '-r', type=int, default=20)
 parser.add_argument('--nu', type=float, default=-1)
@@ -93,7 +93,6 @@ class SHL_ODEfunc(nn.Module):
         return out
 
 class ODEBlock(nn.Module):
-
     def __init__(self, odefunc, num_steps, method='euler'):
         super(ODEBlock, self).__init__()
         self.odefunc = odefunc
@@ -112,7 +111,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def train(model, train_set,
-          loss_fn=nn.MSELoss(),
+          loss_fn=nn.CrossEntropyLoss(),
           input_embedding=nn.Identity(),
           output_embedding=nn.Identity(),
           epochs=1, lr=0.1):
@@ -162,7 +161,7 @@ q = args.dim
 r = args.dim_int
 nu = args.nu
 
-train_set = (torch.randn(N, d), torch.randn(N, d))
+train_set = (torch.randn(N, d), torch.randint(num_labels, (N,)))
 
 # setting input_embedding A
 A = torch.zeros((q, d))
@@ -182,13 +181,14 @@ linear_B.weight.requires_grad = False
 # setting model
 if args.model == 'SHL':
     func = SHL_ODEfunc(dim=q,
-                   dim_int=r,
-                   num_steps=num_layers)
+                       dim_int=r,
+                       num_steps=num_layers)
 else:
     func = RKHS_ODEfunc(dim=q,
-                       dim_int=r,
-                       num_steps=num_layers,
+                        dim_int=r,
+                        num_steps=num_layers,
                         nu=nu)
+
 model = ODEBlock(func, num_steps=num_layers, method='midpoint')
 num_parameters = count_parameters(model)
 print(f'Model has {num_parameters} trainable parameters')
