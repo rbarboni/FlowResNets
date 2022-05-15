@@ -98,8 +98,7 @@ losses = node.train_sgd(model,
                         epochs=args.epochs,
                         lr_init=args.lr_init,
                         decay_steps=args.decay_steps,
-                        decay_rate=args.decay_rate,
-                        ckpt_dir='MNIST_checkpoint')
+                        decay_rate=args.decay_rate)
 
 computation_time = time.time() - start_time
 
