@@ -201,8 +201,7 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
               loss_fn=nn.CrossEntropyLoss(),
               input_embedding=nn.Identity().to(device),
               output_embedding=nn.Identity().to(device),
-              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1,
-              save_best=True, ckpt_dir='checkpoint'):
+              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1):
 
     if torch.cuda.device_count() > 1:
         input_embedding = torch.nn.DataParallel(input_embedding)
@@ -287,18 +286,8 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
             test_classif_loss = torch.cat((test_classif_loss,
                                             loss.detach().cpu().expand((1, ))))
 
-        if test_classif_loss[-1] - best < -1e-3:
+        if test_classif_loss[-1] < best:
             best = test_classif_loss[-1]
-            if save_best:
-                print('Saving...')
-                state = {
-                    'model': model.state_dict(),
-                    'classif_error': best,
-                    'epoch': epoch,
-                }
-                if not os.path.isdir(ckpt_dir):
-                    os.mkdir(ckpt_dir)
-                torch.save(state, './'+ckpt_dir+'/ckpt.pth')
 
         scheduler.step()
 
