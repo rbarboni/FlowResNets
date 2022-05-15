@@ -35,7 +35,6 @@ if torch.cuda.is_available():
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class RKHS_ODEfunc(nn.Module):
-
     def __init__(self, dim, dim_int,
                  num_steps,
                  zero_init=True, nu=-1):
