@@ -87,7 +87,8 @@ losses = node.train_sgd(model,
                         lr_init=args.lr_init,
                         decay_steps=args.decay_steps,
                         decay_rate=args.decay_rate,
-                        ckpt_dir='CIFAR_checkpoint')
+                        parallel=True)
+
 computation_time = time.time() - start_time
 
 training_dict = {

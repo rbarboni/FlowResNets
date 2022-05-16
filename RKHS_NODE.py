@@ -201,13 +201,13 @@ def train_sgd(model, train_loader, train_eval_loader, test_loader,
               loss_fn=nn.CrossEntropyLoss(),
               input_embedding=nn.Identity().to(device),
               output_embedding=nn.Identity().to(device),
-              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1):
+              epochs=1, lr_init=0.1, decay_steps=None, decay_rate=0.1, parallel=False):
 
-    # uncomment to have parallelism
-    #if torch.cuda.device_count() > 1:
-    #    input_embedding = torch.nn.DataParallel(input_embedding)
-    #    output_embedding = torch.nn.DataParallel(output_embedding)
-    #    model = torch.nn.DataParallel(model)
+
+    if parallel and torch.cuda.device_count() > 1:
+        input_embedding = torch.nn.DataParallel(input_embedding)
+        output_embedding = torch.nn.DataParallel(output_embedding)
+        model = torch.nn.DataParallel(model)
 
     model = model.to(device)
     input_embedding = input_embedding.to(device)
