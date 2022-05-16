@@ -13,11 +13,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', '-m', type=str, choices=['RKHS', 'SHL'], default='RKHS')
 parser.add_argument('--dataset_size', '-N', type=int, default=100)
 parser.add_argument('--data_dim', '-d', type=int, default=2)
-parser.add_argument('--num_labels', '-nl', type=int, default=2)
 parser.add_argument('--dim', '-q', type=int, default=2)
-parser.add_argument('--num_layers', '-l', type=int, default=10)
+parser.add_argument('--num_layers', '-l', type=int, default=20)
 parser.add_argument('--dim_int', '-r', type=int, default=20)
 parser.add_argument('--nu', type=float, default=-1)
+parser.add_argument('--sigma', type=float, default=0)
+parser.add_argument('--matrix', '-mat', type=str, choices=['lifting', 'scaling'], default='lifting')
+parser.add_argument('--alpha', type=float, default=1)
 parser.add_argument('--method', type=str, choices=['euler', 'midpoint', 'rk4'], default='midpoint')
 parser.add_argument('--epochs', '-e', type=int, default=1000)
 parser.add_argument('--learning_rate', '-lr', type=float, default=1)
@@ -109,8 +111,8 @@ class ODEBlock(nn.Module):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-def train(model, train_set,
-          loss_fn=nn.CrossEntropyLoss(),
+def train(model, train_set, test_set,
+          loss_fn=nn.MSELoss(),
           input_embedding=nn.Identity(),
           output_embedding=nn.Identity(),
           epochs=1, lr=0.1):
@@ -127,13 +129,18 @@ def train(model, train_set,
 
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     train_loss = torch.empty(0)
+    test_loss = torch.empty(0)
     loss_fn = loss_fn.to(device)
 
     inputs = train_set[0].to(device)
     targets = train_set[1].to(device)
 
-    pbar = tqdm(range(epochs), desc='Loss:', position=0, leave=True)
+    inputs_test = test_set[0].to(device)
+    targets_test = test_set[1].to(device)
+
+    pbar = tqdm(range(epochs), desc='Train: , Test:', position=0, leave=True)
     for epoch in pbar:
+        model.train()
         optimizer.zero_grad()
         outputs = input_embedding(inputs)
         outputs = model(outputs)
@@ -147,33 +154,53 @@ def train(model, train_set,
             return train_loss
         train_loss = torch.cat((train_loss, loss.detach().cpu().expand((1,))))
 
-        pbar.set_description(f'Loss: {train_loss[-1]:.3f}', refresh=True)
+        with torch.no_grad():
+            model.eval()
+            outputs = input_embedding(inputs_test)
+            outputs = model(outputs)
+            outputs = output_embedding(outputs)
+            loss = loss_fn(outputs, targets_test)
+            test_loss = torch.cat((test_loss, loss.detach().cpu().expand((1,))))
 
-    return train_loss
+        pbar.set_description(f'Train: {train_loss[-1]:.3f}, Test: {test_loss[-1]:.3f}', refresh=True)
+
+    return train_loss, test_loss
 
 # setting experience parameters
 N = args.dataset_size
 d = args.data_dim
 num_layers = args.num_layers
-num_labels = args.num_labels
 q = args.dim
 r = args.dim_int
 nu = args.nu
+sigma = args.sigma
 
-train_set = (torch.randn(N, d), torch.randint(num_labels, (N,)))
+X = torch.randn(N, d) #+ d**(-0.5)
+X_test = torch.randn(N, d) #+ d**(-0.5)
 
-# setting input_embedding A
-A = torch.zeros((q, d))
-for i in range(q // d):
-    A[i*d: (i+1)*d, :] = torch.eye(d)
+train_set = (X , -X + sigma * torch.randn(N, d))
+test_set = (X_test, -X_test + sigma * torch.randn(N, d))
+
+
+# setting matrices A and B
+if args.matrix == 'lifting':
+    A = torch.zeros((q, d))
+    for i in range(q // d):
+        A[i*d: (i+1)*d, :] = torch.eye(d)
+    B = torch.zeros((d, q))
+    B[:, :d] = torch.eye(d)
+else:
+    q = 2*d
+    A = torch.zeros((q, d))
+    A[:d, :] = args.alpha * torch.eye(d)
+    B = torch.zeros((d, q))
+    B[:, -d:] = args.alpha * torch.eye(d)
+
 linear_A = nn.Linear(d, q, bias=False)
 linear_A.weight = nn.Parameter(data=A)
 linear_A.weight.requires_grad = False
 
-# setting output_embedding B
-B = torch.zeros((num_labels, q))
-B[:, :num_labels] = torch.eye(num_labels)
-linear_B = nn.Linear(q, num_labels, bias=False)
+linear_B = nn.Linear(q, d, bias=False)
 linear_B.weight = nn.Parameter(data=B)
 linear_B.weight.requires_grad = False
 
@@ -193,21 +220,24 @@ num_parameters = count_parameters(model)
 print(f'Model has {num_parameters} trainable parameters')
 
 start = time.time()
-losses = train(model,
-               train_set,
-               input_embedding=linear_A,
-               output_embedding=linear_B,
-               epochs=args.epochs,
-               lr=args.learning_rate)
+train_loss, test_loss = train(model,
+                              train_set,
+                              test_set,
+                              input_embedding=linear_A,
+                              output_embedding=linear_B,
+                              epochs=args.epochs,
+                              lr=args.learning_rate)
 computation_time = time.time() - start
 
 training_dict = {
     'model': args.model,
+    'matrix': args.matrix,
     'num_layers': args.num_layers,
     'N': args.dataset_size,
     'q': args.dim,
     'r': args.dim_int,
-    'train_loss': losses.numpy(),
+    'train loss': train_loss.numpy(),
+    'test loss': test_loss.numpy(),
     'computation_time': computation_time,
     'num_parameters': num_parameters
 }
