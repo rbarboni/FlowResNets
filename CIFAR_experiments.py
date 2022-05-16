@@ -75,7 +75,7 @@ model = node.ResNet(node.RKHS_Block if args.model=='RKHS' else node.SHL_Block,
                     [2, 2, args.layers, 2],
                     num_classes=len(train_set.classes)
                     )
-model = model.cuda()
+#model = model.cuda()
 
 # Training
 start_time = time.time()
