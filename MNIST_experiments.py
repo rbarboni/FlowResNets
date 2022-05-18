@@ -106,8 +106,7 @@ except FileNotFoundError:
                                      train_eval_loader,
                                      test_loader,
                                      epochs=args.pretrain,
-                                     lr_init=1,
-                                     save_best=False)
+                                     lr_init=1)
     input_embedding = nn.Sequential(*downsampling_layers)
     output_embedding = nn.Sequential(*fc_layers)
 
