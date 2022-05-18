@@ -2,10 +2,6 @@
 
 This file contains the source code for the RKHS-NODE ResNet model.
 
-##### Warning:
-
-Althought the code is conceived to run on several GPUs, it was only tested using a single GPU.
-
 ## Dependencies
 
 You first need to install dependencies
@@ -88,9 +84,6 @@ Plots of Figure 2 can be retrieved running the following scripts:
 python MNIST_experiments.py --in_channels 32 --dim_int 32 --save 32channels_0pretrain.pkl
 python MNIST_experiments.py --in_channels 8 --dim_int 8 --save 8channels_0pretrain.pkl
 python MNIST_experiments.py --in_channels 4 --dim_int 4 --save 4channels_0pretrain.pkl
-python MNIST_experiments.py --in_channels 32 --dim_int 32 --pretrain 3 --lr_init 0.5 --save 32channels_3pretrain.pkl
-python MNIST_experiments.py --in_channels 8 --dim_int 8 --pretrain 3 --lr_init 0.5 --save 8channels_3pretrain.pkl
-python MNIST_experiments.py --in_channels 4 --dim_int 4 --pretrain 3 --lr_init 0.5 --save 4channels_3pretrain.pkl
 ```
 
 ## CIFAR_experiments.py
