@@ -22,8 +22,9 @@ parser.add_argument('--decay_steps', '-ds', nargs='*', type=int, default=[25])
 parser.add_argument('--batch_size', '-bs', type=int, default=256)
 parser.add_argument('--test_batch_size', '-tbs', type=int, default=1000)
 parser.add_argument('--save', '-s', type=str, default='experiment.pkl')
-parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
+
+print('File will be written as: '+args.save)
 
 if not os.path.isdir('MNIST_experiments'):
     os.mkdir('MNIST_experiments')
