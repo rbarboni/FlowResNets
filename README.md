@@ -42,7 +42,7 @@ Several parameters can be parsed into the command line:
 
 - `--epochs`: number of training iterations over the whole training dataset (`default=30`).
 
-- `--lr_init`: learning rate initialization (`default=1`).
+- `--lr_init`: learning rate initialization (`default=0.5`).
 
 - `--decay_steps`: epochs to which the learning rate is decreased, several arguments can be passed corresponding to several decreasing steps (`default=[25]`).
 
@@ -106,11 +106,11 @@ Several parameters can be parsed into the command line:
 
 - `--layers`: number of layers in the third block of  ResNet18 (`default=10`).
 
-- `--epochs`: number of training iterations over the whole training dataset (`default=200`).
+- `--epochs`: number of training iterations over the whole training dataset (`default=300`).
 
-- `--lr_init`: learning rate initialization (`default=5e-3`).
+- `--lr_init`: learning rate initialization (`default=3e-3`).
 
-- `--decay_steps`: epochs to which the learning rate is decreased, several arguments can be passed corresponding to several decreasing steps (`default=[150, 190]`).
+- `--decay_steps`: epochs to which the learning rate is decreased, several arguments can be passed corresponding to several decreasing steps (`default=[260]`).
 
 - `--decay_rate`: factor by which the learning rate is multiplied at decreasing steps (`default=0.1`).
 
